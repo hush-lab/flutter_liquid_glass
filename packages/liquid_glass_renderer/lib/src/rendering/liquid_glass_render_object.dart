@@ -300,7 +300,7 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox {
   @protected
   bool needsGeometryUpdate = true;
 
-  (ui.Image, Rect) _buildGeometryImage(
+  (ui.Image?, Rect) _buildGeometryImage(
     List<(RenderLiquidGlassGeometry, GeometryCache, Matrix4)> geometries,
     Rect bounds,
   ) {
@@ -310,6 +310,17 @@ abstract class LiquidGlassRenderObject extends RenderProxyBox {
     ).snapToPixels(devicePixelRatio);
 
     final size = boundsInMatteSpace.size * devicePixelRatio;
+
+    // During route transitions / animated transforms the matte bounds can
+    // momentarily collapse to a zero-area or non-finite rect. Passing such a
+    // size to `picture.toImageSync` throws ("Invalid image dimensions." when
+    // <= 0, or "Unsupported operation: Infinity or NaN" from `.ceil()`).
+    // Skip building the geometry image for this frame; `paint` already handles
+    // a null `_geometryImage` by falling back to normal painting, which is
+    // invisible for a zero-area frame.
+    if (!size.isFinite || size.width <= 0 || size.height <= 0) {
+      return (null, boundsInMatteSpace);
+    }
 
     final buffer = StringBuffer('$hashCode Built geometry image with '
         '${geometries.length} shapes at size ${size.width}x${size.height}:\n');
